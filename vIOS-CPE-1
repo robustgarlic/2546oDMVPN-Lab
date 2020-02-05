@@ -1,0 +1,260 @@
+vIOS-CPE-1#show run
+vIOS-CPE-1#show running-config
+Building configuration...
+
+Current configuration : 6355 bytes
+!
+! Last configuration change at 18:24:28 UTC Fri Nov 22 2019
+!
+version 15.5
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname vIOS-CPE-1
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition testme
+ rd 65300:64512
+ !
+ address-family ipv4
+  route-target export 65300:64512
+  route-target import 64512:64512
+  route-target import 65300:65300
+ exit-address-family
+ !
+ address-family ipv6
+ exit-address-family
+!
+vrf definition fvrf
+ rd 65555:3549
+ !
+ address-family ipv4
+ exit-address-family
+!
+!
+no aaa new-model
+ethernet lmi ce
+!
+!
+!
+mmi polling-interval 60
+no mmi auto-configure
+no mmi pvc
+mmi snmp-timeout 180
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip cef
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+!
+redundancy
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Loopback0
+ description TEST | L0 | MANAGEMENT
+ vrf forwarding testme
+ ip address 172.30.55.254 255.255.255.255
+!
+interface Loopback25
+ description VFRF
+ vrf forwarding fvrf
+ ip address 172.30.55.254 255.255.255.255
+!
+interface Tunnel25
+ ip address 172.30.48.254 255.255.254.0
+ no ip redirects
+ ip mtu 2900
+ ip nhrp authentication PASS
+ ip nhrp map 172.30.48.1 172.30.0.128
+ ip nhrp map multicast 172.30.0.129
+ ip nhrp map 172.30.48.2 172.30.0.129
+ ip nhrp map 172.30.48.3 172.30.16.128
+ ip nhrp map multicast 172.30.16.128
+ ip nhrp map 172.30.48.4 172.30.16.129
+ ip nhrp map multicast 172.30.16.129
+ ip nhrp map multicast 172.30.0.128
+ ip nhrp network-id 25
+ ip nhrp nhs 172.30.48.1 priority 50
+ ip nhrp nhs 172.30.48.2 priority 100
+ ip nhrp nhs 172.30.48.3 priority 50
+ ip nhrp nhs 172.30.48.4 priority 100
+ ip nhrp nhs fallback 60
+ mpls mtu 2800
+ mpls nhrp
+ mpls bgp forwarding
+ tunnel source Loopback25
+ tunnel mode gre multipoint
+ tunnel key 150
+ tunnel vrf fvrf
+!
+interface GigabitEthernet0/0
+ mtu 3000
+ vrf forwarding fvrf
+ ip address 172.28.0.2 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/1
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/2
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/3
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+router bgp 65666
+ bgp router-id 172.30.55.254
+ bgp always-compare-med
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ timers bgp 10 30
+ neighbor 172.30.48.1 remote-as 64601
+ neighbor 172.30.48.1 description vIOS-Core-1
+ neighbor 172.30.48.1 fall-over bfd
+ neighbor 172.30.48.2 remote-as 64601
+ neighbor 172.30.48.2 description vIOS-Core-2
+ neighbor 172.30.48.2 fall-over bfd
+ neighbor 172.30.48.3 remote-as 64603
+ neighbor 172.30.48.3 description vIOS-Core-3
+ neighbor 172.30.48.3 fall-over bfd
+ neighbor 172.30.48.4 remote-as 64603
+ neighbor 172.30.48.4 description vIOS-Core-4
+ neighbor 172.30.48.4 fall-over bfd
+ !
+ address-family ipv4
+ exit-address-family
+ !
+ address-family vpnv4
+  neighbor 172.30.48.1 activate
+  neighbor 172.30.48.1 send-community extended
+  neighbor 172.30.48.1 route-map RM_VPNV4_PRIMARY_OUT out
+  neighbor 172.30.48.2 activate
+  neighbor 172.30.48.2 send-community extended
+  neighbor 172.30.48.2 route-map RM_VPNV4_PRIMARY_OUT out
+  neighbor 172.30.48.3 activate
+  neighbor 172.30.48.3 send-community extended
+  neighbor 172.30.48.3 route-map RM_VPNV4_PRIMARY_OUT out
+  neighbor 172.30.48.4 activate
+  neighbor 172.30.48.4 send-community extended
+  neighbor 172.30.48.4 route-map RM_VPNV4_PRIMARY_OUT out
+ exit-address-family
+ !
+ address-family ipv4 vrf testme
+  redistribute connected
+ exit-address-family
+ !
+ address-family ipv4 vrf fvrf
+  redistribute connected route-map RM_FVRF_REDIST_CONNECTED
+  neighbor 172.28.0.1 remote-as 65555
+  neighbor 172.28.0.1 fall-over bfd single-hop
+  neighbor 172.28.0.1 activate
+  neighbor 172.28.0.1 send-community both
+  neighbor 172.28.0.1 soft-reconfiguration inbound
+  neighbor 172.28.0.1 route-map RM_FVRF_PRIMARY_WAN_OUT out
+ exit-address-family
+!
+ip forward-protocol nd
+!
+ip as-path access-list 10 permit ^$
+ip as-path access-list 400 permit ^$
+!
+no ip http server
+no ip http secure-server
+!
+!
+route-map RM_FVRF_REDIST_CONNECTED permit 10
+ match interface Loopback25
+!
+route-map RM_FVRF_PRIMARY_WAN_OUT permit 10
+ description Set on peer for the secondary inbound to the site underlay
+ description Set on peer for the primary inbound to the site underlay
+ match as-path 10
+!
+!
+!
+control-plane
+!
+banner exec ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner incoming ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner login ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+!
+line con 0
+line aux 0
+line vty 0 4
+ login
+ transport input none
+!
+no scheduler allocate
+!
+end
+
+vIOS-CPE-1#
